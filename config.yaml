@@ -1,0 +1,86 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Strategy, risk and universe configuration.
+#
+# All thresholds here are *deliberate placeholders* meant to be calibrated in the
+# backtest before any real money is involved. They are NOT optimised values.
+#
+# Secrets (ports, account ids, the LIVE_TRADING flag) live in .env, NOT here.
+# ─────────────────────────────────────────────────────────────────────────────
+
+account:
+  base_currency: EUR
+  total_capital: 10000          # informational only; real equity comes from IBKR
+
+sizing:
+  per_trade_notional: 500       # target position size per trade, in base_currency
+  allow_fractional: true        # use IBKR fractional shares if enabled;
+                                # otherwise round down — 0 shares => skip + log
+
+strategy:
+  timeframe: "1 day"            # daily bars
+  sma_trend: 200                # trend regime filter
+  rsi_period: 14
+  rsi_entry: 30                 # oversold entry threshold (enter when RSI < this)
+  rsi_exit: 55                  # mean-reversion exit threshold (exit when RSI > this)
+  atr_period: 14
+  atr_mult: 3.0                 # ATR trailing-stop multiple (k)
+
+risk:
+  max_open_positions: 12        # hard cap on concurrent positions
+  one_trade_per_symbol: true    # no pyramiding in v1
+  cooldown_days: 3              # no re-entry for N days after an exit (anti-whipsaw)
+  daily_loss_limit_pct: 0.03    # if intraday P&L < -3% of equity => no new entries today
+  auto_flatten_on_kill: false   # OPTIONAL: flatten all positions when kill-switch trips
+                                # (off by default — whipsaw risk)
+  cash_buffer_pct: 0.05         # keep at least 5% of equity in cash, never fully deploy
+
+execution:
+  order_type: "LMT"             # LMT (default), MOO, MOC, MKT
+  limit_offset_pct: 0.002       # limit price offset from last price (0.2%); buy above /
+                                # sell below last to improve fill odds without going blind
+  tif: "DAY"                    # time-in-force for LMT orders (DAY / GTC)
+  outside_rth: false            # allow fills outside regular trading hours
+
+scheduler:
+  timezone: "Europe/Berlin"
+  run_time: "23:30"             # daily run time (after US close, completed daily bars)
+  run_on_weekends: false        # skip Sat/Sun
+
+data:
+  history_duration: "2 Y"       # how much history to request for indicators/backtest
+  what_to_show: "TRADES"        # IBKR historical data type
+  use_rth: true                 # regular trading hours only
+  cache_dir: "data/cache"       # CSV cache for historical bars
+
+# Active universe (pick one of the named universes below).
+active_universe: v1_us_usd
+
+universe:
+  v1_us_usd:
+    # Names actively followed by the user:
+    - {symbol: UNH,  exchange: SMART, currency: USD}
+    - {symbol: NKE,  exchange: SMART, currency: USD}
+    - {symbol: PFE,  exchange: SMART, currency: USD}
+    - {symbol: BMY,  exchange: SMART, currency: USD}   # Bristol Myers Squibb
+    - {symbol: DVN,  exchange: SMART, currency: USD}   # Devon Energy
+    - {symbol: CPB,  exchange: SMART, currency: USD}   # Campbell's
+    # Breadth (liquid large caps):
+    - {symbol: AAPL, exchange: SMART, currency: USD}
+    - {symbol: MSFT, exchange: SMART, currency: USD}
+    - {symbol: JNJ,  exchange: SMART, currency: USD}
+    - {symbol: KO,   exchange: SMART, currency: USD}
+    - {symbol: PG,   exchange: SMART, currency: USD}
+    - {symbol: XOM,  exchange: SMART, currency: USD}
+    - {symbol: CVX,  exchange: SMART, currency: USD}
+    - {symbol: JPM,  exchange: SMART, currency: USD}
+    - {symbol: V,    exchange: SMART, currency: USD}
+    - {symbol: HD,   exchange: SMART, currency: USD}
+
+  # Phase 2 — EU/Xetra (EUR). primaryExchange=IBIS for Xetra disambiguation.
+  v2_eu_eur:
+    - {symbol: SHL,  exchange: SMART, currency: EUR, primaryExchange: IBIS}  # Siemens Healthineers
+    - {symbol: MBG,  exchange: SMART, currency: EUR, primaryExchange: IBIS}  # Mercedes-Benz
+    - {symbol: BAYN, exchange: SMART, currency: EUR, primaryExchange: IBIS}  # Bayer
+    - {symbol: MUV2, exchange: SMART, currency: EUR, primaryExchange: IBIS}  # Münchener Rück
+    - {symbol: ALV,  exchange: SMART, currency: EUR, primaryExchange: IBIS}  # Allianz
+    - {symbol: SAP,  exchange: SMART, currency: EUR, primaryExchange: IBIS}
