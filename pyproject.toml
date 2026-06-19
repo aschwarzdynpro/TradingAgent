@@ -22,10 +22,23 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
+    "ruff>=0.6",
 ]
 
 [tool.setuptools]
 packages = ["src"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = [".venv", "data"]
+
+[tool.ruff.lint]
+# pycodestyle errors, pyflakes, isort, pyupgrade, bugbear, comprehensions, simplify.
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM"]
+# UP042: keep `(str, Enum)` over `StrEnum` — StrEnum changes str()/f-string output
+# (member name vs. value), which would alter log/audit records.
+ignore = ["UP042"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

@@ -11,13 +11,13 @@ from src.risk import AccountSnapshot, RiskManager, compute_quantity
 
 
 def make_rm(**risk_overrides):
-    params = dict(
-        max_open_positions=12,
-        one_trade_per_symbol=True,
-        cooldown_days=3,
-        daily_loss_limit_pct=0.03,
-        cash_buffer_pct=0.05,
-    )
+    params = {
+        "max_open_positions": 12,
+        "one_trade_per_symbol": True,
+        "cooldown_days": 3,
+        "daily_loss_limit_pct": 0.03,
+        "cash_buffer_pct": 0.05,
+    }
     params.update(risk_overrides)
     risk = RiskConfig(**params)
     sizing = SizingConfig(per_trade_notional=500, allow_fractional=True)
@@ -25,8 +25,8 @@ def make_rm(**risk_overrides):
 
 
 def rich_snap(**kw):
-    base = dict(equity=10_000, buying_power=10_000, cash=10_000, daily_pnl=0.0,
-                open_positions=set(), cooldowns={})
+    base = {"equity": 10_000, "buying_power": 10_000, "cash": 10_000, "daily_pnl": 0.0,
+            "open_positions": set(), "cooldowns": {}}
     base.update(kw)
     return AccountSnapshot(**base)
 

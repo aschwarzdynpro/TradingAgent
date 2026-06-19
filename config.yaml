@@ -46,6 +46,16 @@ scheduler:
   run_time: "23:30"             # daily run time (after US close, completed daily bars)
   run_on_weekends: false        # skip Sat/Sun
 
+backtest:
+  # Cost model for the backtest, calibrated to IBKR US-equity FIXED pricing.
+  # (Tiered pricing is lower but adds exchange/clearing fees; fixed is the
+  # conservative, predictable baseline.)
+  commission_per_share: 0.005   # USD per share
+  min_commission: 1.0           # USD minimum per order
+  max_commission_pct: 0.01      # capped at 1% of trade value (overrides the minimum)
+  slippage_bps: 2.0             # modelled fill slippage, basis points of price
+  benchmark: SPY                # buy-and-hold reference for alpha (null to disable)
+
 data:
   history_duration: "2 Y"       # how much history to request for indicators/backtest
   what_to_show: "TRADES"        # IBKR historical data type

@@ -11,7 +11,7 @@ import argparse
 import sys
 from datetime import date, datetime
 
-from .broker import IBKRBroker
+from .broker import AccountValues, IBKRBroker
 from .config import AppConfig, load_config
 from .data import get_bars
 from .execution import ExecutionEngine
@@ -81,7 +81,7 @@ class TradingAgent:
                 self.store.close_position(sym, sp.avg_price, date.today(), "closed_externally")
                 self.store.record_event("EXTERNAL_CLOSE", f"{sym} gone at broker", level="WARNING")
 
-    def _snapshot(self) -> tuple[AccountSnapshot, "AccountValues"]:
+    def _snapshot(self) -> tuple[AccountSnapshot, AccountValues]:
         av = self.broker.account_values()
         prev_equity = self._last_equity()
         daily_pnl = (av.equity - prev_equity) if prev_equity is not None else 0.0
@@ -130,7 +130,6 @@ class TradingAgent:
             if self.cfg.cfg.risk.auto_flatten_on_kill:
                 self._flatten_all("kill_switch_flatten")
 
-        sp = self.cfg.cfg.strategy
         for spec in self.cfg.cfg.symbols:
             try:
                 self._process_symbol(spec, snap, kill)
@@ -237,7 +236,10 @@ def main(argv: list[str] | None = None) -> int:
     if cfg.env.live_trading and not confirm_live_interactive():
         log.error("live_not_confirmed_aborting")
         return 2
-    confirm = (lambda: True)
+
+    def confirm() -> bool:
+        # Live already confirmed once above; downstream brokers are pre-approved.
+        return True
 
     if args.schedule:
         from .scheduler import run_scheduler
