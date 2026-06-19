@@ -10,7 +10,6 @@ import pytest
 from src.config import StrategyConfig
 from src.strategy import PositionState, SignalType, evaluate
 
-
 # Small periods so a short synthetic frame is enough to pass the warm-up gate.
 P = StrategyConfig(
     sma_trend=5, rsi_period=3, rsi_entry=30, rsi_exit=55, atr_period=3, atr_mult=3.0

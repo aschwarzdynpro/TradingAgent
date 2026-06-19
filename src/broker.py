@@ -10,8 +10,8 @@ confirmation callback to return True. There is no way to go live by accident.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 from .config import AppConfig, SymbolSpec
 from .log import get_logger

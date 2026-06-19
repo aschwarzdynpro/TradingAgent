@@ -108,6 +108,17 @@ class SchedulerConfig(BaseModel):
     run_on_weekends: bool = False
 
 
+class BacktestConfig(BaseModel):
+    """Backtest cost/benchmark model. Defaults track IBKR US-equity *fixed* pricing:
+    $0.005/share, $1.00 minimum per order, capped at 1% of trade value."""
+
+    commission_per_share: float = 0.005
+    min_commission: float = 1.0
+    max_commission_pct: float = 0.01
+    slippage_bps: float = 2.0
+    benchmark: str | None = "SPY"  # buy-and-hold reference for alpha; null to disable
+
+
 class DataConfig(BaseModel):
     history_duration: str = "2 Y"
     what_to_show: str = "TRADES"
@@ -131,6 +142,7 @@ class YamlConfig(BaseModel):
     risk: RiskConfig = RiskConfig()
     execution: ExecutionConfig = ExecutionConfig()
     scheduler: SchedulerConfig = SchedulerConfig()
+    backtest: BacktestConfig = BacktestConfig()
     data: DataConfig = DataConfig()
     active_universe: str = "v1_us_usd"
     universe: dict[str, list[SymbolSpec]] = Field(default_factory=dict)

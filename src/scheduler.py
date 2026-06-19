@@ -7,7 +7,7 @@ are placed for the next session.
 
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger

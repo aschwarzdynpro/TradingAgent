@@ -12,7 +12,7 @@ throughout; live is only ever a deliberate, confirmed switch.**
 - Backtest engine (same strategy+risk, no look-ahead) with metrics + equity curve.
 - Broker (`ib_async`), execution (limit/MOO/MOC/MKT, fill reconciliation, orphan
   cleanup), SQLite audit trail, daily scheduler, orchestration agent.
-- Tests for indicators/strategy/risk (33 passing) and SessionStart hook.
+- Tests for indicators/strategy/risk/backtest (41 passing) and SessionStart hook.
 
 ---
 
@@ -25,11 +25,14 @@ Goal: trust the numbers before trusting the agent.
 2. **Backtest the v1 universe on real bars**, then sweep parameters
    (`sma_trend`, `rsi_entry/exit`, `atr_mult`, `cooldown_days`) — but guard
    against overfitting (out-of-sample / walk-forward split).
-3. **Add backtest realism:** per-share commission + slippage model already
-   stubbed in `Backtester`; calibrate to IBKR's actual fees. Add a benchmark
-   (buy-and-hold SPY) and report alpha.
-4. **Backtest regression test:** lock a known result on a fixed CSV fixture so
-   future refactors can't silently change strategy behaviour.
+3. ✅ **Backtest realism:** IBKR-fixed cost model (`$0.005`/share, `$1` min,
+   capped at 1% of trade value) + slippage, all in `config.yaml` under
+   `backtest:`. Buy-and-hold benchmark (default SPY) with alpha (CAGR + total
+   return) reported. *Next:* validate the fee assumption against a real IBKR
+   statement and switch to tiered pricing if that is what the account uses.
+4. ✅ **Backtest regression test:** locked metrics + full trade sequence on
+   committed CSV fixtures (`tests/fixtures/cache/`) — see
+   `tests/test_backtest.py`.
 
 ## Phase 2 — Paper hardening (run it for weeks, watch it)
 
@@ -67,9 +70,9 @@ Goal: trust the numbers before trusting the agent.
    with auto-restart and 2FA handling for unattended runs.
 2. **Run as a service** (systemd/supervisor) with log rotation and the WAL
    SQLite DB on durable storage; scheduled DB backups.
-3. **CI** (GitHub Actions): run `pytest` on every push; optionally add
-   `ruff`/`black`/`mypy` (none configured yet) and wire them into the
-   SessionStart hook.
+3. ✅ **CI** (GitHub Actions): `ruff check` + `pytest` on every push/PR across
+   Python 3.11/3.12 (`.github/workflows/ci.yml`); `ruff` is in the `dev` extra
+   so the SessionStart hook installs it too. *Optional next:* add `mypy`.
 4. **Secrets management** beyond `.env` for production (vault / encrypted env).
 5. **Dashboard:** small read-only view over the SQLite tables (equity curve,
    open positions, recent signals/events).
