@@ -1,0 +1,32 @@
+# Secrets / environment
+.env
+*.env
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# State / data / logs (audit trail stays local, never committed)
+*.sqlite
+*.sqlite3
+*.db
+data/cache/
+data/*.csv
+!data/.gitkeep
+logs/
+*.log
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
