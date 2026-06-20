@@ -44,7 +44,10 @@ class IBKRBroker:
         self._contracts: dict[str, object] = {}
 
     # ── connection ───────────────────────────────────────────────────────────
-    def connect(self) -> None:
+    def connect(self, readonly: bool = False) -> None:
+        """Connect to the gateway. ``readonly=True`` connects without order/account
+        write privileges — use it for pure data work (e.g. the cache fetch) and
+        against a gateway whose API is configured "Read-Only"."""
         env = self.env
         if env.live_trading:
             if self._confirm_live is None or not self._confirm_live():
@@ -54,14 +57,14 @@ class IBKRBroker:
                 )
             log.warning("connecting_live", port=env.port, host=env.host if hasattr(env, "host") else env.ib_host)
         else:
-            log.info("connecting_paper", host=env.ib_host, port=env.port)
+            log.info("connecting_paper", host=env.ib_host, port=env.port, readonly=readonly)
 
         self.ib.connect(
             host=env.ib_host,
             port=env.port,
             clientId=env.ib_client_id,
             timeout=env.ib_timeout,
-            readonly=False,
+            readonly=readonly,
         )
         log.info("connected", mode=env.mode, server_version=self.ib.client.serverVersion())
 

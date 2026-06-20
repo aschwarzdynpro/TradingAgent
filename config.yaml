@@ -57,7 +57,9 @@ backtest:
   benchmark: SPY                # buy-and-hold reference for alpha (null to disable)
 
 data:
-  history_duration: "2 Y"       # how much history to request for indicators/backtest
+  history_duration: "15 Y"      # how much history to request for indicators/backtest
+                                # (long window so the SMA-200 warmup leaves enough
+                                # live bars for a walk-forward backtest; Phase 1.2)
   what_to_show: "TRADES"        # IBKR historical data type
   use_rth: true                 # regular trading hours only
   cache_dir: "data/cache"       # CSV cache for historical bars

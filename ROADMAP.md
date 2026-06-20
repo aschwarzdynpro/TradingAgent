@@ -20,11 +20,17 @@ throughout; live is only ever a deliberate, confirmed switch.**
 
 Goal: trust the numbers before trusting the agent.
 
-1. **Pull real history into the cache.** Run the agent once against the paper
-   gateway (it caches every fetch) or import CSVs into `data/cache/`.
-2. **Backtest the v1 universe on real bars**, then sweep parameters
-   (`sma_trend`, `rsi_entry/exit`, `atr_mult`, `cooldown_days`) — but guard
-   against overfitting (out-of-sample / walk-forward split).
+1. ✅ **Pull real history into the cache.** `python -m src.fetch` (fetch-only:
+   read-only connect, no orders) caches the active universe + benchmark to
+   `data/cache/`. `data.history_duration` raised `2 Y` → `15 Y` so the SMA-200
+   warmup leaves enough live bars (3769 bars/symbol, 2011→2026).
+2. **Backtest the v1 universe on real bars** *(in progress)*, then sweep
+   parameters (`sma_trend`, `rsi_entry/exit`, `atr_mult`, `cooldown_days`) — but
+   guard against overfitting (out-of-sample / walk-forward split).
+   *Baseline (unoptimised placeholders, 15Y):* +1.56% total / 80 trades / 48.8%
+   win vs SPY +482% — but the strategy is structurally under-deployed
+   (`per_trade_notional: 500` on €10k, rarely in market), so absolute return is
+   not yet a verdict. Sweep + sizing reconsideration is the next deliverable.
 3. ✅ **Backtest realism:** IBKR-fixed cost model (`$0.005`/share, `$1` min,
    capped at 1% of trade value) + slippage, all in `config.yaml` under
    `backtest:`. Buy-and-hold benchmark (default SPY) with alpha (CAGR + total
