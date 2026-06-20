@@ -38,6 +38,7 @@ from .data import load_cache
 # Only ``sma_trend`` changes the indicator columns; the rest are signal/exit
 # thresholds. Keep the coarse grid small enough to walk-forward in minutes.
 GRIDS: dict[str, dict[str, list]] = {
+    # Mean-reversion (v1) grids.
     "coarse": {
         "sma_trend": [100, 150, 200],
         "rsi_entry": [25, 30, 35],
@@ -52,6 +53,16 @@ GRIDS: dict[str, dict[str, list]] = {
         "atr_mult": [2.0, 2.5, 3.0, 4.0],
         "cooldown_days": [1, 3, 5],
     },
+    # Trend/momentum (Phase 5). Deliberately SMALL + economically motivated to
+    # resist overfitting: a long-MA trend gate x a 6mo/12mo momentum lookback x
+    # the ATR trail width.
+    "momentum": {
+        "sma_trend": [100, 150, 200],
+        "mom_lookback": [126, 252],
+        "atr_mult": [3.0, 4.0],
+        "cooldown_days": [3],
+        "mode": ["trend_momentum"],
+    },
 }
 
 _OBJECTIVES = ("total_return", "cagr", "sharpe")
@@ -59,19 +70,30 @@ _OBJECTIVES = ("total_return", "cagr", "sharpe")
 
 @dataclass(frozen=True)
 class ParamSet:
+    # sma_trend is always swept; the rest carry mode-appropriate defaults so a
+    # grid only needs to list the keys it actually varies.
     sma_trend: int
-    rsi_entry: float
-    rsi_exit: float
-    atr_mult: float
-    cooldown_days: int
+    rsi_entry: float = 30.0
+    rsi_exit: float = 55.0
+    atr_mult: float = 3.0
+    cooldown_days: int = 3
+    mode: str = "mean_reversion"
+    mom_lookback: int = 252
+    mom_skip: int = 21
+    mom_threshold: float = 0.0
 
     def label(self) -> str:
+        if self.mode == "trend_momentum":
+            return (f"mom{self.mom_lookback} sma{self.sma_trend} "
+                    f"atr{self.atr_mult:g} cd{self.cooldown_days}")
         return (f"sma{self.sma_trend} rsi{self.rsi_entry:g}/{self.rsi_exit:g} "
                 f"atr{self.atr_mult:g} cd{self.cooldown_days}")
 
 
 def grid_params(grid: dict[str, list]) -> list[ParamSet]:
-    keys = ["sma_trend", "rsi_entry", "rsi_exit", "atr_mult", "cooldown_days"]
+    """Cartesian product of a grid. The grid lists only the keys it varies;
+    every key must be a ``ParamSet`` field and ``sma_trend`` must be present."""
+    keys = list(grid.keys())
     return [ParamSet(**dict(zip(keys, combo, strict=True)))
             for combo in itertools.product(*(grid[k] for k in keys))]
 
@@ -79,10 +101,15 @@ def grid_params(grid: dict[str, list]) -> list[ParamSet]:
 def cfg_with_params(cfg: AppConfig, p: ParamSet) -> AppConfig:
     """A deep copy of the config with the swept parameters applied."""
     c = cfg.model_copy(deep=True)
-    c.cfg.strategy.sma_trend = p.sma_trend
-    c.cfg.strategy.rsi_entry = p.rsi_entry
-    c.cfg.strategy.rsi_exit = p.rsi_exit
-    c.cfg.strategy.atr_mult = p.atr_mult
+    s = c.cfg.strategy
+    s.mode = p.mode
+    s.sma_trend = p.sma_trend
+    s.rsi_entry = p.rsi_entry
+    s.rsi_exit = p.rsi_exit
+    s.atr_mult = p.atr_mult
+    s.mom_lookback = p.mom_lookback
+    s.mom_skip = p.mom_skip
+    s.mom_threshold = p.mom_threshold
     c.cfg.risk.cooldown_days = p.cooldown_days
     return c
 
@@ -175,9 +202,11 @@ def walk_forward(
                 best_p, best_obj, best_m = p, obj, m
             progress(i, len(idx_folds), j, len(params))
         if best_p is None:  # no combo cleared min_trades — fall back to config defaults
-            best_p = ParamSet(cfg.cfg.strategy.sma_trend, cfg.cfg.strategy.rsi_entry,
-                              cfg.cfg.strategy.rsi_exit, cfg.cfg.strategy.atr_mult,
-                              cfg.cfg.risk.cooldown_days)
+            s = cfg.cfg.strategy
+            best_p = ParamSet(sma_trend=s.sma_trend, rsi_entry=s.rsi_entry, rsi_exit=s.rsi_exit,
+                              atr_mult=s.atr_mult, cooldown_days=cfg.cfg.risk.cooldown_days,
+                              mode=s.mode, mom_lookback=s.mom_lookback, mom_skip=s.mom_skip,
+                              mom_threshold=s.mom_threshold)
             best_m, _, _ = evaluate_window(cfg, best_p, data, calendar, tr_s, tr_e, warmup, starting_cash)
 
         # Out-of-sample evaluation of the chosen params.
@@ -295,7 +324,8 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     params = grid_params(GRIDS[args.grid])
-    warmup = max(GRIDS[args.grid]["sma_trend"]) + 60
+    g = GRIDS[args.grid]
+    warmup = max(max(g["sma_trend"]), max(g.get("mom_lookback", [0]))) + 60
     print(f"Walk-forward sweep: grid '{args.grid}' = {len(params)} combos/fold, "
           f"objective={args.objective}, min_trades={args.min_trades}, "
           f"train={args.train_years}y test={args.test_years}y, warmup={warmup} bars.")

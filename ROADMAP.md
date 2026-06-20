@@ -91,13 +91,25 @@ Goal: trust the numbers before trusting the agent.
 5. **Dashboard:** small read-only view over the SQLite tables (equity curve,
    open positions, recent signals/events).
 
-## Phase 5 — Strategy evolution (only after the above is solid)
+## Phase 5 — Strategy evolution (started — v1 thesis was not viable)
 
-1. **v2 EU/Xetra universe** (already in config) once multi-currency FX is proven.
-2. **Volatility-scaled sizing** (size by ATR/risk-per-trade instead of fixed
-   notional) and ATR-based initial stops.
-3. **Additional regimes/filters** (e.g. market-breadth or index-trend gate to
-   stand down in bear markets).
+**Trend/momentum candidate (built).** A `strategy.mode: trend_momentum` was added
+(enter when `Close > SMA(sma_trend)` AND 12-1 style momentum > 0; exit on trend
+break / ATR trail; rides the trend, no RSI exit). Walk-forward (same harness,
+€2500/trade, 2016→2025) vs mean-reversion: **OOS +66.5% / CAGR 5.83% / Sharpe
+0.47 / max DD −29%**, vs MR's +12.1% / 1.28% / 0.21 / −14%. Far better, and
+*parameter-stable* — every fold chose `mom126 sma200`, so the form is robust, not
+a noise optimum. **But it still trails SPY** (+207% / 13.3% CAGR) and the −29% DD
+exposes the missing bear-market filter. Net: the honest baseline to beat remains
+"just hold SPY"; momentum is a real improvement but not yet compelling standalone.
+
+Next levers (in likely-impact order):
+1. **Regime/breadth filter** — stand down (to cash) when `SPY < SMA(200)`; should
+   cut the −29% drawdown (fold 4, 2022, was −11.5% OOS) and lift risk-adjusted
+   return. **The indicated next step.**
+2. **Volatility-scaled sizing** (ATR/risk-per-trade instead of fixed notional) +
+   ATR-based initial stops.
+3. **v2 EU/Xetra universe** (already in config) once multi-currency FX is proven.
 4. **Short side / pairs** — a much bigger risk surface; treat as a separate
    project with its own validation.
 

@@ -70,6 +70,9 @@ class SizingConfig(BaseModel):
 
 
 class StrategyConfig(BaseModel):
+    # "mean_reversion" = v1 (RSI dip in an uptrend). "trend_momentum" = ride the
+    # trend while in an uptrend with positive 12-1 momentum (Phase 5 candidate).
+    mode: Literal["mean_reversion", "trend_momentum"] = "mean_reversion"
     timeframe: str = "1 day"
     sma_trend: int = 200
     rsi_period: int = 14
@@ -77,12 +80,24 @@ class StrategyConfig(BaseModel):
     rsi_exit: float = 55.0
     atr_period: int = 14
     atr_mult: float = 3.0
+    # Momentum (trend_momentum mode only): return from mom_lookback bars ago to
+    # mom_skip bars ago, entered when > mom_threshold.
+    mom_lookback: int = 252
+    mom_skip: int = 21
+    mom_threshold: float = 0.0
 
     @field_validator("rsi_entry", "rsi_exit")
     @classmethod
     def _rsi_bounds(cls, v: float) -> float:
         if not 0 <= v <= 100:
             raise ValueError("RSI thresholds must be within [0, 100]")
+        return v
+
+    @field_validator("mom_lookback")
+    @classmethod
+    def _mom_window(cls, v: int, info) -> int:
+        if v <= info.data.get("mom_skip", 0):
+            raise ValueError("mom_lookback must be greater than mom_skip")
         return v
 
 

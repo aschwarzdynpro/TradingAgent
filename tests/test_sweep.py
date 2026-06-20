@@ -72,6 +72,26 @@ def test_grid_params_count_and_type():
     assert len(set(params)) == len(params)  # frozen dataclass -> hashable + unique
 
 
+def test_momentum_grid_builds_trend_momentum_paramsets():
+    params = grid_params(GRIDS["momentum"])
+    g = GRIDS["momentum"]
+    assert len(params) == (len(g["sma_trend"]) * len(g["mom_lookback"])
+                           * len(g["atr_mult"]) * len(g["cooldown_days"]))
+    assert all(p.mode == "trend_momentum" for p in params)
+    assert {p.mom_lookback for p in params} == set(g["mom_lookback"])
+
+
+def test_cfg_with_params_applies_mode_and_momentum():
+    cfg = _cfg()
+    p = ParamSet(sma_trend=150, atr_mult=4.0, cooldown_days=3,
+                 mode="trend_momentum", mom_lookback=126)
+    c2 = cfg_with_params(cfg, p)
+    assert c2.cfg.strategy.mode == "trend_momentum"
+    assert c2.cfg.strategy.mom_lookback == 126
+    assert c2.cfg.strategy.sma_trend == 150
+    assert cfg.cfg.strategy.mode == "mean_reversion"  # original untouched
+
+
 def test_cfg_with_params_applies_without_mutating_original():
     cfg = _cfg()
     p = ParamSet(sma_trend=150, rsi_entry=25, rsi_exit=60, atr_mult=2.0, cooldown_days=5)

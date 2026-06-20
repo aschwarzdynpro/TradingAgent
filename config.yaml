@@ -17,6 +17,7 @@ sizing:
                                 # otherwise round down — 0 shares => skip + log
 
 strategy:
+  mode: "mean_reversion"        # "mean_reversion" (v1) | "trend_momentum" (Phase 5)
   timeframe: "1 day"            # daily bars
   sma_trend: 200                # trend regime filter
   rsi_period: 14
@@ -24,6 +25,11 @@ strategy:
   rsi_exit: 55                  # mean-reversion exit threshold (exit when RSI > this)
   atr_period: 14
   atr_mult: 3.0                 # ATR trailing-stop multiple (k)
+  # trend_momentum mode only: 12-1 style momentum (return from mom_lookback bars
+  # ago to mom_skip bars ago); enter when in an uptrend AND momentum > threshold.
+  mom_lookback: 252             # ~12 months
+  mom_skip: 21                  # ~1 month skipped (short-term reversal)
+  mom_threshold: 0.0            # require positive momentum
 
 risk:
   max_open_positions: 12        # hard cap on concurrent positions

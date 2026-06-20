@@ -16,7 +16,7 @@ P = StrategyConfig(
 )
 
 
-def make_df(close, high, low, sma_trend, rsi, atr, n=10):
+def make_df(close, high, low, sma_trend, rsi, atr, n=10, momentum=0.1):
     """Build an indicator-augmented frame whose LAST row carries the given
     values (earlier rows are filler — evaluate only reads the last row)."""
     idx = pd.bdate_range("2024-01-01", periods=n)
@@ -29,6 +29,7 @@ def make_df(close, high, low, sma_trend, rsi, atr, n=10):
             "sma_trend": [100.0] * n,
             "rsi": [50.0] * n,
             "atr": [1.0] * n,
+            "momentum": [momentum] * n,
         },
         index=idx,
     )
@@ -38,6 +39,7 @@ def make_df(close, high, low, sma_trend, rsi, atr, n=10):
     df.iloc[-1, df.columns.get_loc("sma_trend")] = sma_trend
     df.iloc[-1, df.columns.get_loc("rsi")] = rsi
     df.iloc[-1, df.columns.get_loc("atr")] = atr
+    df.iloc[-1, df.columns.get_loc("momentum")] = momentum
     df.attrs["symbol"] = "TEST"
     return df
 
@@ -135,3 +137,47 @@ def test_nan_indicators_hold():
     r = evaluate(df, None, P)
     assert r.signal is SignalType.HOLD
     assert r.reason == "indicators_not_ready"
+
+
+# ── Trend/momentum mode (Phase 5) ─────────────────────────────────────────────
+P_MOM = StrategyConfig(
+    mode="trend_momentum", sma_trend=5, rsi_period=3, atr_period=3, atr_mult=3.0,
+    mom_lookback=5, mom_skip=1,
+)
+
+
+def test_momentum_enter_when_uptrend_and_positive_momentum():
+    df = make_df(close=105, high=105, low=104, sma_trend=100, rsi=50, atr=1.0, momentum=0.2)
+    r = evaluate(df, None, P_MOM)
+    assert r.signal is SignalType.ENTER_LONG
+    assert r.reason == "trend_momentum"
+
+
+def test_momentum_no_entry_when_momentum_not_positive():
+    df = make_df(close=105, high=105, low=104, sma_trend=100, rsi=50, atr=1.0, momentum=-0.05)
+    r = evaluate(df, None, P_MOM)
+    assert r.signal is SignalType.HOLD
+    assert r.reason == "momentum_not_positive"
+
+
+def test_momentum_no_entry_when_not_uptrend():
+    df = make_df(close=95, high=95, low=94, sma_trend=100, rsi=50, atr=1.0, momentum=0.2)
+    r = evaluate(df, None, P_MOM)
+    assert r.signal is SignalType.HOLD
+    assert r.reason == "no_uptrend"
+
+
+def test_momentum_holds_through_high_rsi():
+    # In momentum mode a high RSI must NOT trigger an exit — it rides the trend.
+    # close 116 > trail (120 - 3*2 = 114) and > sma -> HOLD, despite rsi 99.
+    df = make_df(close=116, high=116, low=115, sma_trend=100, rsi=99, atr=2.0, momentum=0.2)
+    r = evaluate(df, pos(highest_high=120), P_MOM)
+    assert r.signal is SignalType.HOLD
+    assert r.reason == "in_position"
+
+
+def test_momentum_exit_on_trend_break():
+    df = make_df(close=99, high=99, low=98, sma_trend=100, rsi=50, atr=2.0, momentum=0.2)
+    r = evaluate(df, pos(highest_high=100), P_MOM)
+    assert r.signal is SignalType.EXIT
+    assert r.reason == "trend_break"
