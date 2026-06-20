@@ -12,13 +12,13 @@ import sys
 from datetime import date, datetime
 
 from .broker import AccountValues, IBKRBroker
-from .config import AppConfig, load_config
+from .config import AppConfig, SymbolSpec, load_config
 from .data import get_bars
 from .execution import ExecutionEngine
 from .log import configure_logging, get_logger
 from .risk import AccountSnapshot, RiskManager
 from .store import Store, StoredPosition
-from .strategy import PositionState, SignalType, evaluate
+from .strategy import PositionState, SignalType, compute_regime, evaluate
 
 log = get_logger(__name__)
 
@@ -44,6 +44,7 @@ class TradingAgent:
         self.execution = ExecutionEngine(self.broker, cfg, self.store)
         self.rm = RiskManager(cfg.cfg.risk, cfg.cfg.sizing, cfg.cfg.account.base_currency)
         self._fx_cache: dict[str, float] = {}
+        self._market_risk_on: bool | None = None
 
     # ── helpers ────────────────────────────────────────────────────────────────
     def _fx(self, instrument_ccy: str) -> float:
@@ -107,6 +108,28 @@ class TradingAgent:
             conn.close()
         return float(row[0]) if row else None
 
+    def _compute_market_regime(self) -> bool | None:
+        """Market risk-on/off from the regime symbol (its close vs SMA). Returns
+        None when the filter is off or the regime can't be determined (inert)."""
+        sp = self.cfg.cfg.strategy
+        if not sp.use_regime_filter:
+            return None
+        try:
+            contract = self.broker.qualify(SymbolSpec(symbol=sp.regime_symbol))
+            df = get_bars(
+                sp.regime_symbol, ib=self.broker.ib, contract=contract,
+                cache_dir=self.cfg.cfg.data.cache_dir,
+                duration=self.cfg.cfg.data.history_duration,
+                what_to_show=self.cfg.cfg.data.what_to_show, use_rth=self.cfg.cfg.data.use_rth,
+            )
+            reg = compute_regime(df["close"], sp.regime_sma)
+            if not len(reg):
+                return None
+            return bool(reg.iloc[-1])
+        except Exception as e:
+            log.warning("regime_unavailable_inert", symbol=sp.regime_symbol, error=str(e))
+            return None
+
     # ── main cycle ─────────────────────────────────────────────────────────────
     def run_once(self) -> None:
         if not self.broker.connected:
@@ -116,6 +139,15 @@ class TradingAgent:
 
         self.execution.cleanup_orphan_orders()
         self._reconcile_positions()
+
+        self._market_risk_on = self._compute_market_regime()
+        if self.cfg.cfg.strategy.use_regime_filter:
+            log.info("market_regime", risk_on=self._market_risk_on,
+                     symbol=self.cfg.cfg.strategy.regime_symbol)
+            if self._market_risk_on is False:
+                self.store.record_event("REGIME_RISK_OFF",
+                                        f"{self.cfg.cfg.strategy.regime_symbol} below SMA"
+                                        f"{self.cfg.cfg.strategy.regime_sma}; entries blocked")
 
         snap, av = self._snapshot()
         self.store.record_equity(av.equity, cash=av.cash, mode=self.cfg.env.mode)
@@ -157,7 +189,7 @@ class TradingAgent:
                           stored.entry_date, stored.highest_high)
             if stored else None
         )
-        res = evaluate(df, pstate, self.cfg.cfg.strategy)
+        res = evaluate(df, pstate, self.cfg.cfg.strategy, market_risk_on=self._market_risk_on)
         self.store.record_signal(res.asof, spec.symbol, res.signal.value, res.reason,
                                  res.price, res.indicators)
 

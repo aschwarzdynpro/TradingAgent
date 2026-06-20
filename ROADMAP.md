@@ -103,15 +103,30 @@ a noise optimum. **But it still trails SPY** (+207% / 13.3% CAGR) and the −29%
 exposes the missing bear-market filter. Net: the honest baseline to beat remains
 "just hold SPY"; momentum is a real improvement but not yet compelling standalone.
 
-Next levers (in likely-impact order):
-1. **Regime/breadth filter** — stand down (to cash) when `SPY < SMA(200)`; should
-   cut the −29% drawdown (fold 4, 2022, was −11.5% OOS) and lift risk-adjusted
-   return. **The indicated next step.**
-2. **Volatility-scaled sizing** (ATR/risk-per-trade instead of fixed notional) +
-   ATR-based initial stops.
-3. **v2 EU/Xetra universe** (already in config) once multi-currency FX is proven.
-4. **Short side / pairs** — a much bigger risk surface; treat as a separate
+**Regime filter (built).** `strategy.use_regime_filter` (+ `regime_symbol`,
+`regime_sma`, `regime_exit`): no new entries while the regime symbol is below its
+SMA; with `regime_exit`, open positions are also flattened. Wired through backtest,
+sweep (`--regime`/`--regime-exit`) AND the live agent (no logic divergence).
+Walk-forward (momentum, €2500, 2016→2025):
+| variant | OOS total | CAGR | Sharpe | max DD |
+|---|---|---|---|---|
+| momentum, no regime | +66.5% | 5.83% | 0.47 | −29.1% |
+| + regime entry-gate only | +46.3% | 4.32% | 0.39 | −34.7% |
+| **+ regime_exit (flatten)** | +57.7% | 5.19% | **0.51** | **−17.7%** |
+`regime_exit` is the winner — drawdown −29%→−17.7%, best Sharpe. Entry-gate-only is
+a trap (worse): you must *exit* on risk-off, not just stop buying. Still trails SPY
+(13.3% CAGR) on absolute return, but the risk profile is now much gentler.
+
+Remaining levers:
+1. **Volatility-scaled sizing** (ATR/risk-per-trade instead of fixed notional) +
+   ATR-based initial stops. **Indicated next step.**
+2. **v2 EU/Xetra universe** (already in config) once multi-currency FX is proven.
+3. **Short side / pairs** — a much bigger risk surface; treat as a separate
    project with its own validation.
+
+> Honest baseline check: even the best variant (Sharpe 0.51, −17.7% DD, ~5.2%
+> CAGR) trails buy-and-hold SPY on return. Decide the mandate (beat SPY absolute
+> vs. low-drawdown / uncorrelated stream) before investing more tuning.
 
 ---
 

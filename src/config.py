@@ -85,6 +85,12 @@ class StrategyConfig(BaseModel):
     mom_lookback: int = 252
     mom_skip: int = 21
     mom_threshold: float = 0.0
+    # Market-regime filter: when on, no new entries while the regime symbol trades
+    # below its SMA (risk-off); with regime_exit, open positions are also closed.
+    use_regime_filter: bool = False
+    regime_symbol: str = "SPY"
+    regime_sma: int = 200
+    regime_exit: bool = False
 
     @field_validator("rsi_entry", "rsi_exit")
     @classmethod

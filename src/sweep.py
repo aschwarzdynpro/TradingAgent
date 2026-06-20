@@ -33,6 +33,7 @@ import pandas as pd
 from .backtest import Backtester, benchmark_metrics, compute_metrics
 from .config import AppConfig, load_config
 from .data import load_cache
+from .strategy import compute_regime
 
 # ── parameter grids ──────────────────────────────────────────────────────────
 # Only ``sma_trend`` changes the indicator columns; the rest are signal/exit
@@ -122,6 +123,7 @@ def _slice(data: dict[str, pd.DataFrame], start: pd.Timestamp, end: pd.Timestamp
 def evaluate_window(
     cfg: AppConfig, p: ParamSet, data: dict[str, pd.DataFrame], calendar: list[pd.Timestamp],
     w_start_idx: int, w_end_idx: int, warmup: int, starting_cash: float,
+    regime: pd.Series | None = None,
 ) -> tuple[dict, list, pd.Series]:
     """Run the backtest over ``[w_start - warmup, w_end]`` but score only the
     window ``[w_start, w_end]`` (equity renormalised to ``starting_cash`` at the
@@ -129,7 +131,7 @@ def evaluate_window(
     data_start = calendar[max(0, w_start_idx - warmup)]
     w_start, w_end = calendar[w_start_idx], calendar[w_end_idx]
     sliced = _slice(data, data_start, w_end)
-    res = Backtester(cfg_with_params(cfg, p), starting_cash=starting_cash).run(sliced)
+    res = Backtester(cfg_with_params(cfg, p), starting_cash=starting_cash).run(sliced, regime=regime)
 
     eq = res.equity_curve.loc[w_start:w_end]
     if len(eq) < 2 or eq.iloc[0] <= 0:
@@ -179,6 +181,7 @@ def walk_forward(
     cfg: AppConfig, data: dict[str, pd.DataFrame], params: list[ParamSet],
     *, train_years: float, test_years: float, max_folds: int, warmup: int,
     objective: str, min_trades: int, starting_cash: float,
+    regime: pd.Series | None = None,
     progress=lambda *_: None,
 ) -> list[Fold]:
     calendar = sorted(set().union(*[set(df.index) for df in data.values()]))
@@ -196,7 +199,7 @@ def walk_forward(
         # In-sample sweep.
         best_p, best_obj, best_m = None, float("-inf"), {}
         for j, p in enumerate(params):
-            m, _, _ = evaluate_window(cfg, p, data, calendar, tr_s, tr_e, warmup, starting_cash)
+            m, _, _ = evaluate_window(cfg, p, data, calendar, tr_s, tr_e, warmup, starting_cash, regime)
             obj = objective_value(m, objective, min_trades)
             if obj > best_obj:
                 best_p, best_obj, best_m = p, obj, m
@@ -207,11 +210,11 @@ def walk_forward(
                               atr_mult=s.atr_mult, cooldown_days=cfg.cfg.risk.cooldown_days,
                               mode=s.mode, mom_lookback=s.mom_lookback, mom_skip=s.mom_skip,
                               mom_threshold=s.mom_threshold)
-            best_m, _, _ = evaluate_window(cfg, best_p, data, calendar, tr_s, tr_e, warmup, starting_cash)
+            best_m, _, _ = evaluate_window(cfg, best_p, data, calendar, tr_s, tr_e, warmup, starting_cash, regime)
 
         # Out-of-sample evaluation of the chosen params.
         oos_m, oos_trades, oos_eq = evaluate_window(
-            cfg, best_p, data, calendar, te_s, te_e, warmup, starting_cash)
+            cfg, best_p, data, calendar, te_s, te_e, warmup, starting_cash, regime)
         folds.append(Fold(i, calendar[tr_s], calendar[tr_e], calendar[te_s], calendar[te_e],
                           best_p, best_m, oos_m, oos_trades, oos_eq))
     return folds
@@ -304,6 +307,10 @@ def main(argv: list[str] | None = None) -> int:
                         help="override sizing.per_trade_notional (deployment experiment)")
     parser.add_argument("--max-positions", type=int, default=None,
                         help="override risk.max_open_positions (deployment experiment)")
+    parser.add_argument("--regime", action="store_true",
+                        help="enable the market-regime filter (no entries when regime symbol < SMA)")
+    parser.add_argument("--regime-exit", action="store_true",
+                        help="with --regime, also flatten open positions when risk-off")
     parser.add_argument("--out", default="data/walkforward_oos_equity.csv")
     args = parser.parse_args(argv)
 
@@ -313,6 +320,9 @@ def main(argv: list[str] | None = None) -> int:
         cfg.cfg.sizing.per_trade_notional = args.notional
     if args.max_positions is not None:
         cfg.cfg.risk.max_open_positions = args.max_positions
+    if args.regime:
+        cfg.cfg.strategy.use_regime_filter = True
+        cfg.cfg.strategy.regime_exit = args.regime_exit
 
     data: dict[str, pd.DataFrame] = {}
     for spec in cfg.cfg.symbols:
@@ -323,6 +333,16 @@ def main(argv: list[str] | None = None) -> int:
         print(f"No cached data in '{cfg.cfg.data.cache_dir}'. Run `python -m src.fetch` first.")
         return 1
 
+    # Market-regime series (risk-on/off), if the filter is enabled.
+    regime = None
+    sp = cfg.cfg.strategy
+    if sp.use_regime_filter:
+        rbars = load_cache(cfg.cfg.data.cache_dir, sp.regime_symbol)
+        if rbars is None or not len(rbars):
+            print(f"Regime symbol '{sp.regime_symbol}' not cached — run `python -m src.fetch`.")
+            return 1
+        regime = compute_regime(rbars["close"], sp.regime_sma)
+
     params = grid_params(GRIDS[args.grid])
     g = GRIDS[args.grid]
     warmup = max(max(g["sma_trend"]), max(g.get("mom_lookback", [0]))) + 60
@@ -332,6 +352,9 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  sizing: per_trade_notional={cfg.cfg.sizing.per_trade_notional:g} "
           f"(~{cfg.cfg.sizing.per_trade_notional / cash * 100:.0f}% of {cash:g}), "
           f"max_open_positions={cfg.cfg.risk.max_open_positions}.")
+    if sp.use_regime_filter:
+        print(f"  regime filter ON: {sp.regime_symbol} vs SMA{sp.regime_sma}, "
+              f"regime_exit={sp.regime_exit}.")
 
     last = [-1]
     def progress(i, nf, j, nc):
@@ -343,7 +366,7 @@ def main(argv: list[str] | None = None) -> int:
     folds = walk_forward(
         cfg, data, params, train_years=args.train_years, test_years=args.test_years,
         max_folds=args.folds, warmup=warmup, objective=args.objective,
-        min_trades=args.min_trades, starting_cash=cash, progress=progress)
+        min_trades=args.min_trades, starting_cash=cash, regime=regime, progress=progress)
     print()
 
     stitched = stitch_oos(folds, cash)

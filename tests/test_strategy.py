@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 from src.config import StrategyConfig
-from src.strategy import PositionState, SignalType, evaluate
+from src.strategy import PositionState, SignalType, compute_regime, evaluate
 
 # Small periods so a short synthetic frame is enough to pass the warm-up gate.
 P = StrategyConfig(
@@ -181,3 +181,59 @@ def test_momentum_exit_on_trend_break():
     r = evaluate(df, pos(highest_high=100), P_MOM)
     assert r.signal is SignalType.EXIT
     assert r.reason == "trend_break"
+
+
+# ── Market-regime filter (Phase 5.1) ──────────────────────────────────────────
+P_REG = StrategyConfig(
+    mode="trend_momentum", sma_trend=5, rsi_period=3, atr_period=3, atr_mult=3.0,
+    mom_lookback=5, mom_skip=1, use_regime_filter=True,
+)
+P_REG_EXIT = P_REG.model_copy(update={"regime_exit": True})
+
+
+def test_regime_risk_off_blocks_entry():
+    df = make_df(close=105, high=105, low=104, sma_trend=100, rsi=50, atr=1.0, momentum=0.2)
+    r = evaluate(df, None, P_REG, market_risk_on=False)
+    assert r.signal is SignalType.HOLD
+    assert r.reason == "regime_risk_off"
+
+
+def test_regime_risk_on_allows_entry():
+    df = make_df(close=105, high=105, low=104, sma_trend=100, rsi=50, atr=1.0, momentum=0.2)
+    r = evaluate(df, None, P_REG, market_risk_on=True)
+    assert r.signal is SignalType.ENTER_LONG
+    assert r.reason == "trend_momentum"
+
+
+def test_regime_filter_off_ignores_market_risk_on():
+    # P_MOM has the filter off; an explicit risk-off must NOT block the entry.
+    df = make_df(close=105, high=105, low=104, sma_trend=100, rsi=50, atr=1.0, momentum=0.2)
+    r = evaluate(df, None, P_MOM, market_risk_on=False)
+    assert r.signal is SignalType.ENTER_LONG
+
+
+def test_regime_exit_flattens_position_when_risk_off():
+    # Above trail and above sma -> normally HOLD; regime_exit flips it to EXIT.
+    df = make_df(close=116, high=116, low=115, sma_trend=100, rsi=50, atr=2.0, momentum=0.2)
+    r = evaluate(df, pos(highest_high=120), P_REG_EXIT, market_risk_on=False)
+    assert r.signal is SignalType.EXIT
+    assert r.reason == "regime_exit"
+
+
+def test_regime_without_exit_holds_position_when_risk_off():
+    # Risk-off blocks entries but, without regime_exit, does not flatten a winner.
+    df = make_df(close=116, high=116, low=115, sma_trend=100, rsi=50, atr=2.0, momentum=0.2)
+    r = evaluate(df, pos(highest_high=120), P_REG, market_risk_on=False)
+    assert r.signal is SignalType.HOLD
+    assert r.reason == "in_position"
+
+
+def test_compute_regime_close_vs_sma():
+    import pandas as pd
+
+    close = pd.Series([10, 10, 10, 10, 20], index=pd.bdate_range("2024-01-01", periods=5))
+    reg = compute_regime(close, sma_period=3)
+    # SMA(3) of last point = (10+10+20)/3 = 13.33; close 20 > 13.33 -> risk-on.
+    assert bool(reg.iloc[-1]) is True
+    # Warm-up points (SMA NaN) are risk-off.
+    assert bool(reg.iloc[0]) is False

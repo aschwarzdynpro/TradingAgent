@@ -70,6 +70,12 @@ def compute_indicators(df: pd.DataFrame, p: StrategyConfig) -> pd.DataFrame:
     return out
 
 
+def compute_regime(close: pd.Series, sma_period: int) -> pd.Series:
+    """Risk-on (True) when ``close`` is above its SMA(sma_period). Index-aligned
+    to ``close``; the warm-up span is risk-off (NaN comparison -> False)."""
+    return close > sma(close, sma_period)
+
+
 def _min_bars(p: StrategyConfig) -> int:
     """Bars required before the mode's indicators are fully warmed up."""
     if p.mode == "trend_momentum":
@@ -81,11 +87,16 @@ def evaluate(
     df: pd.DataFrame,
     position: PositionState | None,
     p: StrategyConfig,
+    market_risk_on: bool | None = None,
 ) -> SignalResult:
     """Evaluate the strategy on the last completed bar of ``df``.
 
     ``df`` may be raw bars (indicators are computed on the fly) or already carry
     sma_trend/rsi/atr columns. Pass ``position=None`` when flat.
+
+    ``market_risk_on`` is the regime-filter input (the market index above its SMA):
+    only honoured when ``p.use_regime_filter`` is set, and only an explicit
+    ``False`` is treated as risk-off (``None`` leaves the filter inert).
     """
     if any(c not in df.columns for c in ("sma_trend", "rsi", "atr")):
         df = compute_indicators(df, p)  # also adds momentum
@@ -117,10 +128,17 @@ def evaluate(
     if pd.isna(sma_v) or pd.isna(atr_v) or pd.isna(timing):
         return SignalResult(symbol, SignalType.HOLD, "indicators_not_ready", close, asof, snapshot)
 
+    risk_off = p.use_regime_filter and market_risk_on is False
+    snapshot["market_risk_on"] = market_risk_on
+
     # ── In a position: check exits (any one triggers) ────────────────────────
     if position is not None:
         new_high = max(position.highest_high, high)
         snapshot["highest_high"] = new_high
+
+        # Defensive regime exit: market risk-off flattens the position first.
+        if risk_off and p.regime_exit:
+            return SignalResult(symbol, SignalType.EXIT, "regime_exit", close, asof, snapshot, new_high)
 
         # RSI mean-reversion exit only applies in mean-reversion mode; momentum
         # mode rides the trend and exits on the trail or a trend break.
@@ -138,6 +156,9 @@ def evaluate(
         return SignalResult(symbol, SignalType.HOLD, "in_position", close, asof, snapshot, new_high)
 
     # ── Flat: check entry ─────────────────────────────────────────────────────
+    if risk_off:
+        return SignalResult(symbol, SignalType.HOLD, "regime_risk_off", close, asof, snapshot)
+
     uptrend = close > sma_v
     if momentum_mode:
         if uptrend and mom_v > p.mom_threshold:
