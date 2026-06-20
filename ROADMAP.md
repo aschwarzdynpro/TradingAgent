@@ -24,13 +24,17 @@ Goal: trust the numbers before trusting the agent.
    read-only connect, no orders) caches the active universe + benchmark to
    `data/cache/`. `data.history_duration` raised `2 Y` → `15 Y` so the SMA-200
    warmup leaves enough live bars (3769 bars/symbol, 2011→2026).
-2. **Backtest the v1 universe on real bars** *(in progress)*, then sweep
-   parameters (`sma_trend`, `rsi_entry/exit`, `atr_mult`, `cooldown_days`) — but
-   guard against overfitting (out-of-sample / walk-forward split).
-   *Baseline (unoptimised placeholders, 15Y):* +1.56% total / 80 trades / 48.8%
-   win vs SPY +482% — but the strategy is structurally under-deployed
-   (`per_trade_notional: 500` on €10k, rarely in market), so absolute return is
-   not yet a verdict. Sweep + sizing reconsideration is the next deliverable.
+2. ✅ **Backtest + walk-forward sweep on real bars.** `python -m src.sweep`
+   (rolling train→test folds; params chosen in-sample, scored out-of-sample;
+   warm-up-aware; min-trades guard). **Verdict: v1 has no out-of-sample edge.**
+   Coarse grid, 6 folds (2016→2025): mean IS total-return +2.91% collapses to
+   **−0.20% OOS**; stitched OOS **−1.22%** over ~9y vs SPY **+193.5%**, 142
+   trades / 44.4% win, Sharpe −0.07. This is structural, not a calibration miss:
+   (a) under-deployment — `per_trade_notional: 500` on €10k, rarely in market;
+   (b) the $1 min-commission is ~0.4% round-trip on a €500 notional, so costs
+   eat the thin mean-reversion edge. **Decision needed before any paper soak**
+   (Phase 2): re-deploy/re-size and re-test, or rework the strategy thesis
+   (Phase 5). Do NOT run a multi-week paper soak on v1 as-is.
 3. ✅ **Backtest realism:** IBKR-fixed cost model (`$0.005`/share, `$1` min,
    capped at 1% of trade value) + slippage, all in `config.yaml` under
    `backtest:`. Buy-and-hold benchmark (default SPY) with alpha (CAGR + total
