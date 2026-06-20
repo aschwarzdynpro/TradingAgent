@@ -271,11 +271,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--folds", type=int, default=99, help="max number of folds")
     parser.add_argument("--cash", type=float, default=None,
                         help="starting cash per window (default: account.total_capital)")
+    parser.add_argument("--notional", type=float, default=None,
+                        help="override sizing.per_trade_notional (deployment experiment)")
+    parser.add_argument("--max-positions", type=int, default=None,
+                        help="override risk.max_open_positions (deployment experiment)")
     parser.add_argument("--out", default="data/walkforward_oos_equity.csv")
     args = parser.parse_args(argv)
 
     cfg = load_config()
     cash = args.cash if args.cash is not None else cfg.cfg.account.total_capital
+    if args.notional is not None:
+        cfg.cfg.sizing.per_trade_notional = args.notional
+    if args.max_positions is not None:
+        cfg.cfg.risk.max_open_positions = args.max_positions
 
     data: dict[str, pd.DataFrame] = {}
     for spec in cfg.cfg.symbols:
@@ -291,6 +299,9 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Walk-forward sweep: grid '{args.grid}' = {len(params)} combos/fold, "
           f"objective={args.objective}, min_trades={args.min_trades}, "
           f"train={args.train_years}y test={args.test_years}y, warmup={warmup} bars.")
+    print(f"  sizing: per_trade_notional={cfg.cfg.sizing.per_trade_notional:g} "
+          f"(~{cfg.cfg.sizing.per_trade_notional / cash * 100:.0f}% of {cash:g}), "
+          f"max_open_positions={cfg.cfg.risk.max_open_positions}.")
 
     last = [-1]
     def progress(i, nf, j, nc):
