@@ -100,6 +100,74 @@ universe:
     - {symbol: V,    exchange: SMART, currency: USD}
     - {symbol: HD,   exchange: SMART, currency: USD}
 
+  # Phase 6 — broad US universe for cross-sectional momentum (sector-spread,
+  # long-history liquid names). Survivorship caveat: these are names known today;
+  # a point-in-time constituent set would be cleaner. Good enough for a first cut.
+  xsec_us:
+    - {symbol: AAPL, exchange: SMART, currency: USD}
+    - {symbol: MSFT, exchange: SMART, currency: USD}
+    - {symbol: NVDA, exchange: SMART, currency: USD}
+    - {symbol: ORCL, exchange: SMART, currency: USD}
+    - {symbol: CSCO, exchange: SMART, currency: USD}
+    - {symbol: IBM,  exchange: SMART, currency: USD}
+    - {symbol: INTC, exchange: SMART, currency: USD}
+    - {symbol: QCOM, exchange: SMART, currency: USD}
+    - {symbol: TXN,  exchange: SMART, currency: USD}
+    - {symbol: ADBE, exchange: SMART, currency: USD}
+    - {symbol: CRM,  exchange: SMART, currency: USD}
+    - {symbol: AVGO, exchange: SMART, currency: USD}
+    - {symbol: GOOGL, exchange: SMART, currency: USD}
+    - {symbol: META, exchange: SMART, currency: USD}
+    - {symbol: NFLX, exchange: SMART, currency: USD}
+    - {symbol: DIS,  exchange: SMART, currency: USD}
+    - {symbol: VZ,   exchange: SMART, currency: USD}
+    - {symbol: AMZN, exchange: SMART, currency: USD}
+    - {symbol: HD,   exchange: SMART, currency: USD}
+    - {symbol: MCD,  exchange: SMART, currency: USD}
+    - {symbol: NKE,  exchange: SMART, currency: USD}
+    - {symbol: SBUX, exchange: SMART, currency: USD}
+    - {symbol: LOW,  exchange: SMART, currency: USD}
+    - {symbol: PG,   exchange: SMART, currency: USD}
+    - {symbol: KO,   exchange: SMART, currency: USD}
+    - {symbol: PEP,  exchange: SMART, currency: USD}
+    - {symbol: WMT,  exchange: SMART, currency: USD}
+    - {symbol: COST, exchange: SMART, currency: USD}
+    - {symbol: MO,   exchange: SMART, currency: USD}
+    - {symbol: JNJ,  exchange: SMART, currency: USD}
+    - {symbol: UNH,  exchange: SMART, currency: USD}
+    - {symbol: PFE,  exchange: SMART, currency: USD}
+    - {symbol: MRK,  exchange: SMART, currency: USD}
+    - {symbol: ABBV, exchange: SMART, currency: USD}
+    - {symbol: TMO,  exchange: SMART, currency: USD}
+    - {symbol: ABT,  exchange: SMART, currency: USD}
+    - {symbol: LLY,  exchange: SMART, currency: USD}
+    - {symbol: AMGN, exchange: SMART, currency: USD}
+    - {symbol: JPM,  exchange: SMART, currency: USD}
+    - {symbol: BAC,  exchange: SMART, currency: USD}
+    - {symbol: WFC,  exchange: SMART, currency: USD}
+    - {symbol: C,    exchange: SMART, currency: USD}
+    - {symbol: GS,   exchange: SMART, currency: USD}
+    - {symbol: AXP,  exchange: SMART, currency: USD}
+    - {symbol: V,    exchange: SMART, currency: USD}
+    - {symbol: MA,   exchange: SMART, currency: USD}
+    - {symbol: BA,   exchange: SMART, currency: USD}
+    - {symbol: CAT,  exchange: SMART, currency: USD}
+    - {symbol: GE,   exchange: SMART, currency: USD}
+    - {symbol: HON,  exchange: SMART, currency: USD}
+    - {symbol: UPS,  exchange: SMART, currency: USD}
+    - {symbol: UNP,  exchange: SMART, currency: USD}
+    - {symbol: LMT,  exchange: SMART, currency: USD}
+    - {symbol: XOM,  exchange: SMART, currency: USD}
+    - {symbol: CVX,  exchange: SMART, currency: USD}
+    - {symbol: COP,  exchange: SMART, currency: USD}
+    - {symbol: SLB,  exchange: SMART, currency: USD}
+    - {symbol: EOG,  exchange: SMART, currency: USD}
+    - {symbol: LIN,  exchange: SMART, currency: USD}
+    - {symbol: APD,  exchange: SMART, currency: USD}
+    - {symbol: FCX,  exchange: SMART, currency: USD}
+    - {symbol: NEE,  exchange: SMART, currency: USD}
+    - {symbol: DUK,  exchange: SMART, currency: USD}
+
   # Phase 2 — EU/Xetra (EUR). primaryExchange=IBIS for Xetra disambiguation.
   v2_eu_eur:
     - {symbol: SHL,  exchange: SMART, currency: EUR, primaryExchange: IBIS}  # Siemens Healthineers

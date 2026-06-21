@@ -93,10 +93,18 @@ def main(argv: list[str] | None = None) -> int:
                         help="only fetch these symbols (must be in the active universe)")
     parser.add_argument("--skip-benchmark", action="store_true",
                         help="do not also fetch the backtest benchmark (e.g. SPY)")
+    parser.add_argument("--universe", metavar="NAME",
+                        help="fetch this named universe instead of the active one")
     args = parser.parse_args(argv)
 
     cfg = load_config()
     configure_logging(cfg.env.log_level)
+
+    if args.universe:
+        if args.universe not in cfg.cfg.universe:
+            print(f"Universe '{args.universe}' not found. Available: {list(cfg.cfg.universe)}")
+            return 1
+        cfg.cfg.active_universe = args.universe
 
     if cfg.env.live_trading:
         log.error("fetch_refuses_live", msg="fetch-only is a paper/data step; set LIVE_TRADING=false")

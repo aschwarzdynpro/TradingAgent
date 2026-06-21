@@ -135,8 +135,41 @@ Remaining levers:
    project with its own validation.
 
 > Honest baseline check: even the best variant (Sharpe 0.51, −17.7% DD, ~5.2%
-> CAGR) trails buy-and-hold SPY on return. Decide the mandate (beat SPY absolute
-> vs. low-drawdown / uncorrelated stream) before investing more tuning.
+> CAGR) trails buy-and-hold SPY on return. The single-name signals above can't
+> beat SPY on Sharpe — cross-sectional ranking over a *broad* universe can (Phase 6).
+
+## Phase 6 — Cross-sectional momentum (beats SPY on Sharpe)
+
+The reframe that unlocked it: *beating SPY = building Sharpe > the market's
+(~0.8), then sizing/levering* — not chasing raw return. A handful of names with a
+single signal can't; ranking a broad universe and holding the strongest names can.
+
+`python -m src.xsec` — a portfolio engine (separate from the per-symbol daily
+engine): every ~21 trading days, rank a ~60-name US universe (`xsec_us`) by 12-1
+momentum, hold the top-K equal-weight (long only), optional regime overlay, costs
+on turnover; daily equity → metrics comparable to SPY. Data via
+`src/fetch.py --universe xsec_us`.
+
+Result (2012→2026, full universe, no regime): **CAGR 21.4% / Sharpe 1.02 / maxDD
+−30%** vs SPY 13.1% / **0.82** / −34%. **First thing in the project to beat SPY on
+both return and Sharpe.** Robustness:
+- Survives dropping the 7 biggest mega-winners (NVDA/AVGO/META/AAPL/MSFT/AMZN/LLY):
+  still Sharpe **0.89** / CAGR 16.7%.
+- Every (top-K ∈ {8,12,20}) × (lookback ∈ {126,252}) combo beats SPY's 0.82
+  (range 0.85–1.05); 12-month lookback consistently > 6-month (the canonical
+  momentum finding). Not cherry-picked.
+- The regime overlay *hurts* here (cash-drag in a bull): Sharpe 0.86 < 1.02.
+
+Open / next:
+1. **Survivorship** — the universe is *today's* names; the magnitude is likely
+   inflated. A point-in-time constituent set would be the clean test (hard with
+   free data). The mega-winner-exclusion check is a partial mitigation.
+2. **Walk-forward** the cross-sectional params (standard 12-1 reduces overfit
+   risk, but OOS folds would harden it).
+3. **Volatility targeting** to push Sharpe higher / enable modest leverage to beat
+   SPY by more at matched risk.
+4. **Wire it as a strategy mode** (`xsec` rebalancing) into the live agent if it
+   holds up — currently research-only, separate from the deployable agent.
 
 ---
 
