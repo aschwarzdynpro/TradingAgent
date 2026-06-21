@@ -26,7 +26,7 @@ import pandas as pd
 from .config import AppConfig, BacktestConfig, load_config
 from .data import generate_synthetic, load_cache
 from .risk import AccountSnapshot, RiskManager
-from .strategy import PositionState, SignalType, compute_indicators, evaluate
+from .strategy import PositionState, SignalType, compute_indicators, compute_regime, evaluate
 
 
 @dataclass
@@ -83,7 +83,7 @@ class Backtester:
         fee = max(self.costs.min_commission, self.costs.commission_per_share * shares)
         return min(fee, self.costs.max_commission_pct * notional)
 
-    def run(self, data: dict[str, pd.DataFrame]) -> BacktestResult:
+    def run(self, data: dict[str, pd.DataFrame], regime: pd.Series | None = None) -> BacktestResult:
         # Precompute indicators per symbol (causal -> no look-ahead).
         ind = {s: compute_indicators(df, self.sp) for s, df in data.items() if len(df)}
         # Unified trading calendar across all symbols.
@@ -143,6 +143,7 @@ class Backtester:
                 equity=equity, buying_power=cash, cash=cash, daily_pnl=daily_pnl,
                 open_positions=set(positions.keys()), cooldowns=cooldowns,
             )
+            risk_on = bool(regime.loc[ts]) if (regime is not None and ts in regime.index) else None
             for sym, df in ind.items():
                 if ts not in df.index:
                     continue
@@ -154,7 +155,7 @@ class Backtester:
                                   pos.highest_high)
                     if pos else None
                 )
-                res = evaluate(window, pstate, self.sp)
+                res = evaluate(window, pstate, self.sp, market_risk_on=risk_on)
                 if res.signal is SignalType.EXIT and sym in positions:
                     pending_exits[sym] = res.reason
                 elif res.signal is SignalType.ENTER_LONG and sym not in positions:
@@ -306,8 +307,19 @@ def main(argv: list[str] | None = None) -> int:
               f"'{cfg.cfg.data.cache_dir}' or run with --synthetic.")
         return 1
 
+    # Market-regime series (risk-on/off) from the regime symbol, if the filter is on.
+    regime = None
+    sp = cfg.cfg.strategy
+    if sp.use_regime_filter:
+        rbars = (generate_synthetic(sp.regime_symbol) if args.synthetic
+                 else load_cache(cfg.cfg.data.cache_dir, sp.regime_symbol))
+        if rbars is not None and len(rbars):
+            regime = compute_regime(rbars["close"], sp.regime_sma)
+        else:
+            print(f"(regime symbol '{sp.regime_symbol}' unavailable — filter inert)")
+
     bt = Backtester(cfg, starting_cash=starting_cash)
-    result = bt.run(data)
+    result = bt.run(data, regime=regime)
 
     # Benchmark (buy-and-hold) + alpha, if configured and data is available.
     bench_sym = cfg.cfg.backtest.benchmark

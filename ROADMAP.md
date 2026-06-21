@@ -20,11 +20,25 @@ throughout; live is only ever a deliberate, confirmed switch.**
 
 Goal: trust the numbers before trusting the agent.
 
-1. **Pull real history into the cache.** Run the agent once against the paper
-   gateway (it caches every fetch) or import CSVs into `data/cache/`.
-2. **Backtest the v1 universe on real bars**, then sweep parameters
-   (`sma_trend`, `rsi_entry/exit`, `atr_mult`, `cooldown_days`) — but guard
-   against overfitting (out-of-sample / walk-forward split).
+1. ✅ **Pull real history into the cache.** `python -m src.fetch` (fetch-only:
+   read-only connect, no orders) caches the active universe + benchmark to
+   `data/cache/`. `data.history_duration` raised `2 Y` → `15 Y` so the SMA-200
+   warmup leaves enough live bars (3769 bars/symbol, 2011→2026).
+2. ✅ **Backtest + walk-forward sweep on real bars.** `python -m src.sweep`
+   (rolling train→test folds; params chosen in-sample, scored out-of-sample;
+   warm-up-aware; min-trades guard; `--notional`/`--max-positions` overrides).
+   **Verdict: v1 has no *competitive* edge, and is heavily overfit.** Coarse
+   grid, 6 folds (2016→2025):
+   - At the shipped `per_trade_notional: 500` (5% of €10k): stitched OOS
+     **−1.22%** over ~9y, Sharpe −0.07. The strategy paid fees to tread water —
+     the $1 min-commission is ~0.4% round-trip on a €500 notional.
+   - **Deployment experiment** at €2500/trade (25%, min-commission now ~0.03%):
+     stitched OOS flips to **+12.14%** (CAGR +1.28%, Sharpe 0.21, max DD −14%).
+     So €500 was self-sabotage — *but* even sized properly it badly trails SPY
+     (**+193.5%**, 12.7% CAGR) and overfits hard (mean IS +21.5% → OOS +2.0%).
+   Conclusion: the €500 default is wrong (below cost-efficiency) and should be
+   raised; sizing alone does **not** make v1 viable. **Do NOT run a paper soak on
+   v1 as-is.** Realistic path is strategy rework (Phase 5), not more sweeping.
 3. ✅ **Backtest realism:** IBKR-fixed cost model (`$0.005`/share, `$1` min,
    capped at 1% of trade value) + slippage, all in `config.yaml` under
    `backtest:`. Buy-and-hold benchmark (default SPY) with alpha (CAGR + total
@@ -77,15 +91,42 @@ Goal: trust the numbers before trusting the agent.
 5. **Dashboard:** small read-only view over the SQLite tables (equity curve,
    open positions, recent signals/events).
 
-## Phase 5 — Strategy evolution (only after the above is solid)
+## Phase 5 — Strategy evolution (started — v1 thesis was not viable)
 
-1. **v2 EU/Xetra universe** (already in config) once multi-currency FX is proven.
-2. **Volatility-scaled sizing** (size by ATR/risk-per-trade instead of fixed
-   notional) and ATR-based initial stops.
-3. **Additional regimes/filters** (e.g. market-breadth or index-trend gate to
-   stand down in bear markets).
-4. **Short side / pairs** — a much bigger risk surface; treat as a separate
+**Trend/momentum candidate (built).** A `strategy.mode: trend_momentum` was added
+(enter when `Close > SMA(sma_trend)` AND 12-1 style momentum > 0; exit on trend
+break / ATR trail; rides the trend, no RSI exit). Walk-forward (same harness,
+€2500/trade, 2016→2025) vs mean-reversion: **OOS +66.5% / CAGR 5.83% / Sharpe
+0.47 / max DD −29%**, vs MR's +12.1% / 1.28% / 0.21 / −14%. Far better, and
+*parameter-stable* — every fold chose `mom126 sma200`, so the form is robust, not
+a noise optimum. **But it still trails SPY** (+207% / 13.3% CAGR) and the −29% DD
+exposes the missing bear-market filter. Net: the honest baseline to beat remains
+"just hold SPY"; momentum is a real improvement but not yet compelling standalone.
+
+**Regime filter (built).** `strategy.use_regime_filter` (+ `regime_symbol`,
+`regime_sma`, `regime_exit`): no new entries while the regime symbol is below its
+SMA; with `regime_exit`, open positions are also flattened. Wired through backtest,
+sweep (`--regime`/`--regime-exit`) AND the live agent (no logic divergence).
+Walk-forward (momentum, €2500, 2016→2025):
+| variant | OOS total | CAGR | Sharpe | max DD |
+|---|---|---|---|---|
+| momentum, no regime | +66.5% | 5.83% | 0.47 | −29.1% |
+| + regime entry-gate only | +46.3% | 4.32% | 0.39 | −34.7% |
+| **+ regime_exit (flatten)** | +57.7% | 5.19% | **0.51** | **−17.7%** |
+`regime_exit` is the winner — drawdown −29%→−17.7%, best Sharpe. Entry-gate-only is
+a trap (worse): you must *exit* on risk-off, not just stop buying. Still trails SPY
+(13.3% CAGR) on absolute return, but the risk profile is now much gentler.
+
+Remaining levers:
+1. **Volatility-scaled sizing** (ATR/risk-per-trade instead of fixed notional) +
+   ATR-based initial stops. **Indicated next step.**
+2. **v2 EU/Xetra universe** (already in config) once multi-currency FX is proven.
+3. **Short side / pairs** — a much bigger risk surface; treat as a separate
    project with its own validation.
+
+> Honest baseline check: even the best variant (Sharpe 0.51, −17.7% DD, ~5.2%
+> CAGR) trails buy-and-hold SPY on return. Decide the mandate (beat SPY absolute
+> vs. low-drawdown / uncorrelated stream) before investing more tuning.
 
 ---
 
