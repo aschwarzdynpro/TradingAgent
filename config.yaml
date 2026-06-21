@@ -12,9 +12,15 @@ account:
   total_capital: 10000          # informational only; real equity comes from IBKR
 
 sizing:
-  per_trade_notional: 500       # target position size per trade, in base_currency
+  method: "fixed_notional"      # "fixed_notional" (v1) | "risk_per_trade" (Phase 5.2)
+  per_trade_notional: 500       # fixed_notional: target size per trade, in base_currency
   allow_fractional: true        # use IBKR fractional shares if enabled;
                                 # otherwise round down — 0 shares => skip + log
+  # risk_per_trade mode: size so a stop-out (at strategy.atr_mult * ATR) loses
+  # risk_per_trade_pct of equity; scales with account size and volatility, capped
+  # at max_position_pct of equity. Fixes fixed-notional not scaling to the account.
+  risk_per_trade_pct: 0.01      # risk 1% of equity per trade
+  max_position_pct: 0.20        # never let one position exceed 20% of equity
 
 strategy:
   mode: "mean_reversion"        # "mean_reversion" (v1) | "trend_momentum" (Phase 5)

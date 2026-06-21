@@ -65,8 +65,14 @@ class AccountConfig(BaseModel):
 
 
 class SizingConfig(BaseModel):
+    # "fixed_notional" = v1 (per_trade_notional per trade). "risk_per_trade" =
+    # size so a stop-out loses risk_per_trade_pct of equity (volatility/equity
+    # scaled), capped at max_position_pct of equity.
+    method: Literal["fixed_notional", "risk_per_trade"] = "fixed_notional"
     per_trade_notional: float = 500.0
     allow_fractional: bool = True
+    risk_per_trade_pct: float = 0.01   # risk_per_trade mode: fraction of equity risked to the stop
+    max_position_pct: float = 0.20     # risk_per_trade mode: cap one position at this fraction of equity
 
 
 class StrategyConfig(BaseModel):

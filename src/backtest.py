@@ -159,7 +159,10 @@ class Backtester:
                 if res.signal is SignalType.EXIT and sym in positions:
                     pending_exits[sym] = res.reason
                 elif res.signal is SignalType.ENTER_LONG and sym not in positions:
-                    decision = self.rm.evaluate_entry(sym, res.price, d, snap, fx_base_to_instrument=1.0)
+                    atr_v = res.indicators.get("atr") or 0.0
+                    stop_dist = self.sp.atr_mult * atr_v if atr_v else None
+                    decision = self.rm.evaluate_entry(sym, res.price, d, snap,
+                                                      fx_base_to_instrument=1.0, stop_distance=stop_dist)
                     if decision.approved:
                         pending_entries[sym] = decision.quantity
                         # Reserve a slot/cash so multiple same-day entries respect caps.

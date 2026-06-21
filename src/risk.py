@@ -56,6 +56,28 @@ def compute_quantity(
     return float(qty)
 
 
+def compute_quantity_risk(
+    equity_base: float,
+    risk_pct: float,
+    stop_distance: float,
+    fx_base_to_instrument: float,
+    allow_fractional: bool,
+) -> float:
+    """Volatility/equity-scaled size: quantity such that a stop-out at
+    ``stop_distance`` (instrument price units, e.g. ``atr_mult * ATR``) loses
+    ``risk_pct`` of ``equity_base``. Scales with both account size and the
+    instrument's volatility, so it self-adjusts as equity or ATR change.
+    """
+    if equity_base <= 0 or stop_distance <= 0 or fx_base_to_instrument <= 0 or risk_pct <= 0:
+        return 0.0
+    risk_base = risk_pct * equity_base
+    # loss_base = qty * stop_distance / fx  ==> qty = risk_base * fx / stop_distance
+    qty = risk_base * fx_base_to_instrument / stop_distance
+    if not allow_fractional:
+        qty = math.floor(qty)
+    return float(qty)
+
+
 class RiskManager:
     def __init__(self, risk: RiskConfig, sizing: SizingConfig, base_currency: str = "EUR"):
         self.risk = risk
@@ -79,6 +101,22 @@ class RiskManager:
             return False
         return (asof - last_exit).days < self.risk.cooldown_days
 
+    # ── sizing ─────────────────────────────────────────────────────────────────
+    def _size(self, price: float, snap: AccountSnapshot, fx: float,
+              stop_distance: float | None) -> float:
+        """Position quantity per the configured sizing method. risk_per_trade is
+        capped at max_position_pct of equity; it falls back to fixed notional when
+        no valid stop_distance is available."""
+        if self.sizing.method == "risk_per_trade" and stop_distance and stop_distance > 0:
+            qty = compute_quantity_risk(snap.equity, self.sizing.risk_per_trade_pct,
+                                        stop_distance, fx, self.sizing.allow_fractional)
+            cap = compute_quantity(self.sizing.max_position_pct * snap.equity, price, fx,
+                                   self.sizing.allow_fractional)
+            if cap > 0:
+                qty = min(qty, cap)
+            return qty
+        return compute_quantity(self.sizing.per_trade_notional, price, fx, self.sizing.allow_fractional)
+
     # ── entry approval ───────────────────────────────────────────────────────
     def evaluate_entry(
         self,
@@ -87,8 +125,14 @@ class RiskManager:
         asof: date,
         snap: AccountSnapshot,
         fx_base_to_instrument: float = 1.0,
+        stop_distance: float | None = None,
     ) -> RiskDecision:
-        """Run every entry guard; return an approved quantity or a rejection."""
+        """Run every entry guard; return an approved quantity or a rejection.
+
+        ``stop_distance`` (instrument price units = ``atr_mult * ATR``) is required
+        for ``risk_per_trade`` sizing; if the method is risk_per_trade but it is
+        missing/invalid, sizing falls back to fixed notional.
+        """
         if self.kill_switch_active(snap):
             return RiskDecision(False, 0.0, "kill_switch_active")
 
@@ -104,9 +148,7 @@ class RiskManager:
         if price <= 0:
             return RiskDecision(False, 0.0, "invalid_price")
 
-        qty = compute_quantity(
-            self.sizing.per_trade_notional, price, fx_base_to_instrument, self.sizing.allow_fractional
-        )
+        qty = self._size(price, snap, fx_base_to_instrument, stop_distance)
         if qty <= 0:
             return RiskDecision(False, 0.0, "quantity_rounds_to_zero")
 

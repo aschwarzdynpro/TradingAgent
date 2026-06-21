@@ -307,6 +307,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="override sizing.per_trade_notional (deployment experiment)")
     parser.add_argument("--max-positions", type=int, default=None,
                         help="override risk.max_open_positions (deployment experiment)")
+    parser.add_argument("--risk-pct", type=float, default=None,
+                        help="use risk_per_trade sizing: risk this fraction of equity per trade (e.g. 0.01)")
     parser.add_argument("--regime", action="store_true",
                         help="enable the market-regime filter (no entries when regime symbol < SMA)")
     parser.add_argument("--regime-exit", action="store_true",
@@ -320,6 +322,9 @@ def main(argv: list[str] | None = None) -> int:
         cfg.cfg.sizing.per_trade_notional = args.notional
     if args.max_positions is not None:
         cfg.cfg.risk.max_open_positions = args.max_positions
+    if args.risk_pct is not None:
+        cfg.cfg.sizing.method = "risk_per_trade"
+        cfg.cfg.sizing.risk_per_trade_pct = args.risk_pct
     if args.regime:
         cfg.cfg.strategy.use_regime_filter = True
         cfg.cfg.strategy.regime_exit = args.regime_exit
@@ -349,9 +354,14 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Walk-forward sweep: grid '{args.grid}' = {len(params)} combos/fold, "
           f"objective={args.objective}, min_trades={args.min_trades}, "
           f"train={args.train_years}y test={args.test_years}y, warmup={warmup} bars.")
-    print(f"  sizing: per_trade_notional={cfg.cfg.sizing.per_trade_notional:g} "
-          f"(~{cfg.cfg.sizing.per_trade_notional / cash * 100:.0f}% of {cash:g}), "
-          f"max_open_positions={cfg.cfg.risk.max_open_positions}.")
+    sz = cfg.cfg.sizing
+    if sz.method == "risk_per_trade":
+        print(f"  sizing: risk_per_trade {sz.risk_per_trade_pct*100:g}% of equity to the ATR stop, "
+              f"cap {sz.max_position_pct*100:g}%/pos, max_open_positions={cfg.cfg.risk.max_open_positions}.")
+    else:
+        print(f"  sizing: per_trade_notional={sz.per_trade_notional:g} "
+              f"(~{sz.per_trade_notional / cash * 100:.0f}% of {cash:g}), "
+              f"max_open_positions={cfg.cfg.risk.max_open_positions}.")
     if sp.use_regime_filter:
         print(f"  regime filter ON: {sp.regime_symbol} vs SMA{sp.regime_sma}, "
               f"regime_exit={sp.regime_exit}.")

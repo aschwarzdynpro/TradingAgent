@@ -7,7 +7,7 @@ from datetime import date
 import pytest
 
 from src.config import RiskConfig, SizingConfig
-from src.risk import AccountSnapshot, RiskManager, compute_quantity
+from src.risk import AccountSnapshot, RiskManager, compute_quantity, compute_quantity_risk
 
 
 def make_rm(**risk_overrides):
@@ -58,6 +58,60 @@ def test_entry_quantity_zero_is_rejected():
     d = rm.evaluate_entry("AAPL", price=600, asof=date(2024, 1, 10), snap=rich_snap())
     assert not d.approved
     assert d.reason == "quantity_rounds_to_zero"
+
+
+# ── risk_per_trade sizing (Phase 5.2) ─────────────────────────────────────────
+def test_compute_quantity_risk_basic():
+    # risk 1% of 10k = 100 base; stop 4 -> 100 * 1.0 / 4 = 25 shares
+    assert compute_quantity_risk(10_000, 0.01, 4.0, 1.0, True) == pytest.approx(25.0)
+
+
+def test_compute_quantity_risk_fx_and_floor():
+    # fx 1.08: 100 * 1.08 / 4 = 27 shares
+    assert compute_quantity_risk(10_000, 0.01, 4.0, 1.08, True) == pytest.approx(27.0)
+    # 100 / 3 = 33.33 -> floor 33 without fractional
+    assert compute_quantity_risk(10_000, 0.01, 3.0, 1.0, False) == 33
+
+
+def test_compute_quantity_risk_guards():
+    assert compute_quantity_risk(10_000, 0.01, 0.0, 1.0, True) == 0.0   # no stop distance
+    assert compute_quantity_risk(0, 0.01, 4.0, 1.0, True) == 0.0        # no equity
+
+
+def _rm_risk(**sizing_kw):
+    rm = make_rm()
+    base = {"method": "risk_per_trade", "risk_per_trade_pct": 0.01,
+            "max_position_pct": 0.20, "allow_fractional": True}
+    base.update(sizing_kw)
+    rm.sizing = SizingConfig(**base)
+    return rm
+
+
+def test_entry_risk_per_trade_sizes_to_stop():
+    # equity 10k, risk 1% = 100; stop_distance 5 -> 20 shares; cost 1000 < buffers.
+    rm = _rm_risk()
+    d = rm.evaluate_entry("AAPL", price=50, asof=date(2024, 1, 10), snap=rich_snap(),
+                          stop_distance=5.0)
+    assert d.approved
+    assert d.quantity == pytest.approx(20.0)
+
+
+def test_entry_risk_per_trade_caps_position():
+    # Tiny stop wants 200 shares (cost 10k, would breach the buffer); cap at
+    # 20% of equity = 2000 / 50 = 40 shares keeps it approved.
+    rm = _rm_risk()
+    d = rm.evaluate_entry("AAPL", price=50, asof=date(2024, 1, 10), snap=rich_snap(),
+                          stop_distance=0.5)
+    assert d.approved
+    assert d.quantity == pytest.approx(40.0)
+
+
+def test_entry_risk_per_trade_falls_back_without_stop():
+    # No stop_distance -> fixed notional (per_trade_notional 500 / 50 = 10 shares).
+    rm = _rm_risk(per_trade_notional=500)
+    d = rm.evaluate_entry("AAPL", price=50, asof=date(2024, 1, 10), snap=rich_snap())
+    assert d.approved
+    assert d.quantity == pytest.approx(10.0)
 
 
 # ── caps ──────────────────────────────────────────────────────────────────────
