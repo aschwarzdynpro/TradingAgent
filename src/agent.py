@@ -208,7 +208,10 @@ class TradingAgent:
     def _do_entry(self, spec, res, snap: AccountSnapshot) -> None:
         fx = self._fx(spec.currency)
         ref_price = self.broker.last_price(self.broker.qualify(spec)) or res.price
-        decision = self.rm.evaluate_entry(spec.symbol, ref_price, res.asof, snap, fx_base_to_instrument=fx)
+        atr_v = res.indicators.get("atr") or 0.0
+        stop_dist = self.cfg.cfg.strategy.atr_mult * atr_v if atr_v else None
+        decision = self.rm.evaluate_entry(spec.symbol, ref_price, res.asof, snap,
+                                          fx_base_to_instrument=fx, stop_distance=stop_dist)
         if not decision.approved:
             log.info("entry_rejected", symbol=spec.symbol, reason=decision.reason)
             self.store.record_event("ENTRY_REJECTED", f"{spec.symbol}: {decision.reason}")

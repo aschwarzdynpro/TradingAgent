@@ -117,11 +117,21 @@ Walk-forward (momentum, €2500, 2016→2025):
 a trap (worse): you must *exit* on risk-off, not just stop buying. Still trails SPY
 (13.3% CAGR) on absolute return, but the risk profile is now much gentler.
 
+**Volatility/equity-scaled sizing (built — Phase 5.2).** `sizing.method:
+risk_per_trade`: size so a stop-out (at `atr_mult * ATR`, the same stop the
+strategy trails) loses `risk_per_trade_pct` of equity, capped at `max_position_pct`.
+Wired through risk → backtest → agent; sweep `--risk-pct`. **Fixes the real
+operational sizing trap** (fixed notional doesn't scale — €500 is nothing on a ~1M
+paper account). *But on this universe it did not beat fixed sizing:* momentum +
+regime_exit at 1% risk → Sharpe 0.30 / −25% DD (432 trades, over-broad); even
+concentrated to 5 positions only 0.37 / −20%, vs fixed €2500's **0.51 / −17.7%**.
+The fixed concentration (cash ran out at ~4 positions) was accidentally better.
+**Champion config stays: trend_momentum + regime_exit + fixed ~€2500-equiv.** Keep
+risk_per_trade for live/paper (equity-scaling) but it's not the backtest winner.
+
 Remaining levers:
-1. **Volatility-scaled sizing** (ATR/risk-per-trade instead of fixed notional) +
-   ATR-based initial stops. **Indicated next step.**
-2. **v2 EU/Xetra universe** (already in config) once multi-currency FX is proven.
-3. **Short side / pairs** — a much bigger risk surface; treat as a separate
+1. **v2 EU/Xetra universe** (already in config) once multi-currency FX is proven.
+2. **Short side / pairs** — a much bigger risk surface; treat as a separate
    project with its own validation.
 
 > Honest baseline check: even the best variant (Sharpe 0.51, −17.7% DD, ~5.2%
