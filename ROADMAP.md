@@ -160,12 +160,19 @@ both return and Sharpe.** Robustness:
   momentum finding). Not cherry-picked.
 - The regime overlay *hurts* here (cash-drag in a bull): Sharpe 0.86 < 1.02.
 
+Hardening done:
+- **Time persistence (`xsec --folds 5`):** the edge beats SPY on Sharpe in **5/5**
+  contiguous sub-periods (2012→2026), and on return in each — not one lucky stretch.
+  Ex-mega-winners it still wins 5/5 (the 2023→26 fold a dead heat), though the
+  margin is thin in 2018→2026. Persistent, modest once the biggest winners are
+  stripped.
+
 Open / next:
-1. **Survivorship** — the universe is *today's* names; the magnitude is likely
-   inflated. A point-in-time constituent set would be the clean test (hard with
-   free data). The mega-winner-exclusion check is a partial mitigation.
-2. **Walk-forward** the cross-sectional params (standard 12-1 reduces overfit
-   risk, but OOS folds would harden it).
+1. **Broader universe (`xsec_us_large`, ~140 names)** — defined + ready; the fetch
+   needs the IB gateway up (it was offline / daily auto-logoff). Dilutes
+   survivorship further.
+2. **Survivorship** — still today's names; a point-in-time constituent set would be
+   the clean test (hard with free data). Breadth + the exclusion check mitigate.
 3. **Volatility targeting** to push Sharpe higher / enable modest leverage to beat
    SPY by more at matched risk.
 4. **Wire it as a strategy mode** (`xsec` rebalancing) into the live agent if it

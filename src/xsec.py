@@ -102,6 +102,38 @@ def run_xsec(
     return equity, info
 
 
+def spy_returns(cache_dir: str, bench: str, index: pd.Index) -> pd.Series:
+    """SPY daily returns aligned to ``index`` (for the per-fold comparison)."""
+    df = load_cache(cache_dir, bench)
+    if df is None or not len(df):
+        return pd.Series(dtype=float)
+    return df["close"].astype(float).reindex(index).ffill().pct_change()
+
+
+def fold_report(strat_rets: pd.Series, spy_rets: pd.Series, n_folds: int) -> None:
+    """Per-sub-period strat-vs-SPY Sharpe + total return — does the edge persist
+    in time, or is one lucky stretch carrying the full-period number?"""
+    idx = strat_rets.index
+    bounds = [int(round(i * len(idx) / n_folds)) for i in range(n_folds + 1)]
+    print(f"\n Per-fold persistence ({n_folds} contiguous sub-periods):")
+    print(f" {'window':<25}{'strat Sh':>10}{'SPY Sh':>9}{'strat ret':>11}{'SPY ret':>10}{'win?':>6}")
+    print(" " + "-" * 65)
+    wins = 0
+    for a, b in zip(bounds, bounds[1:], strict=False):
+        sl = idx[a:b]
+        sr, br = strat_rets.loc[sl].dropna(), spy_rets.loc[sl].dropna()
+        if len(sr) < 2:
+            continue
+        s_sh, b_sh = ann_sharpe(sr), ann_sharpe(br)
+        s_ret = (1 + sr).prod() - 1
+        b_ret = (1 + br).prod() - 1
+        win = s_sh > b_sh
+        wins += win
+        print(f" {str(sl[0].date())+'->'+str(sl[-1].date()):<25}{s_sh:>10.2f}{b_sh:>9.2f}"
+              f"{s_ret*100:>10.1f}%{b_ret*100:>9.1f}%{'  Y' if win else '  n':>6}")
+    print(f" => strategy wins {wins}/{n_folds} folds on Sharpe")
+
+
 def spy_stats(cache_dir: str, bench: str, index: pd.Index, starting_cash: float) -> dict:
     df = load_cache(cache_dir, bench)
     if df is None or not len(df):
@@ -127,6 +159,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--exclude", nargs="+", default=[], metavar="SYM",
                    help="drop these symbols (survivorship-bias robustness check)")
     p.add_argument("--cash", type=float, default=10_000.0)
+    p.add_argument("--folds", type=int, default=1,
+                   help="split the period into N contiguous sub-periods and report strat vs SPY per fold")
     p.add_argument("--out", default="data/xsec_equity.csv")
     args = p.parse_args(argv)
 
@@ -177,7 +211,12 @@ def main(argv: list[str] | None = None) -> int:
     print("-" * 60)
     beat = info["sharpe"] > spy.get("sharpe", float("inf"))
     print(f" => {'STRATEGY beats SPY on Sharpe' if beat else 'does NOT beat SPY on Sharpe yet'}")
-    print("=" * 60 + "\n")
+    print("=" * 60)
+
+    if args.folds > 1:
+        spy_r = spy_returns(cache_dir, cfg.cfg.backtest.benchmark or "SPY", equity.index)
+        fold_report(equity.pct_change(), spy_r, args.folds)
+    print()
 
     equity.to_csv(args.out, index_label="date", header=["equity"])
     print(f"Equity curve -> {args.out}")
